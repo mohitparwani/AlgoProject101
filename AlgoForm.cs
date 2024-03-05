@@ -106,7 +106,7 @@ namespace AlgoProject1
         private void initInstruments()
         {
             //CustomInstrument zw = new CustomInstrument(MarketId.CME, ProductType.Future, "CL",Order_Data);
-            oaf = new OrdersAndFills(tt_net_sdk.Dispatcher.Current, LiveOrders,Order_Data,Algo_Orders,Account_Data);
+            oaf = new OrdersAndFills(tt_net_sdk.Dispatcher.Current, LiveOrders,Order_Data,Algo_Orders,Account_Data,Connection_Message_Data,Account_Message_Data);
         }
     }
     

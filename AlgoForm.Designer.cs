@@ -43,12 +43,16 @@
             this.Account = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.Algo_Orders = new System.Windows.Forms.DataGridView();
             this.Account_Data = new System.Windows.Forms.DataGridView();
+            this.Connection_Message_Data = new System.Windows.Forms.DataGridView();
+            this.Account_Message_Data = new System.Windows.Forms.DataGridView();
             this.ordersAndFillsBindingSource = new System.Windows.Forms.BindingSource(this.components);
             this.ordersAndFillsBindingSource1 = new System.Windows.Forms.BindingSource(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.Order_Data)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.LiveOrders)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.Algo_Orders)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.Account_Data)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.Connection_Message_Data)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.Account_Message_Data)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.ordersAndFillsBindingSource)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.ordersAndFillsBindingSource1)).BeginInit();
             this.SuspendLayout();
@@ -181,6 +185,24 @@
             this.Account_Data.Size = new System.Drawing.Size(396, 323);
             this.Account_Data.TabIndex = 3;
             // 
+            // Connection_Message_Data
+            // 
+            this.Connection_Message_Data.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
+            this.Connection_Message_Data.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.Connection_Message_Data.Location = new System.Drawing.Point(1, 507);
+            this.Connection_Message_Data.Name = "Connection_Message_Data";
+            this.Connection_Message_Data.Size = new System.Drawing.Size(387, 308);
+            this.Connection_Message_Data.TabIndex = 4;
+            // 
+            // Account_Message_Data
+            // 
+            this.Account_Message_Data.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
+            this.Account_Message_Data.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.Account_Message_Data.Location = new System.Drawing.Point(394, 507);
+            this.Account_Message_Data.Name = "Account_Message_Data";
+            this.Account_Message_Data.Size = new System.Drawing.Size(408, 308);
+            this.Account_Message_Data.TabIndex = 5;
+            // 
             // ordersAndFillsBindingSource
             // 
             this.ordersAndFillsBindingSource.DataSource = typeof(AlgoProject101.OrdersAndFills);
@@ -193,7 +215,9 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1466, 827);
+            this.ClientSize = new System.Drawing.Size(1498, 841);
+            this.Controls.Add(this.Account_Message_Data);
+            this.Controls.Add(this.Connection_Message_Data);
             this.Controls.Add(this.Account_Data);
             this.Controls.Add(this.Algo_Orders);
             this.Controls.Add(this.LiveOrders);
@@ -204,6 +228,8 @@
             ((System.ComponentModel.ISupportInitialize)(this.LiveOrders)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.Algo_Orders)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.Account_Data)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.Connection_Message_Data)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.Account_Message_Data)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.ordersAndFillsBindingSource)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.ordersAndFillsBindingSource1)).EndInit();
             this.ResumeLayout(false);
@@ -228,6 +254,8 @@
         private System.Windows.Forms.DataGridViewTextBoxColumn NumberOfUniqueAccounts;
         private System.Windows.Forms.DataGridView Algo_Orders;
         private System.Windows.Forms.DataGridView Account_Data;
+        private System.Windows.Forms.DataGridView Connection_Message_Data;
+        private System.Windows.Forms.DataGridView Account_Message_Data;
     }
 }
 

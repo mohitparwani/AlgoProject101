@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.IO;
-using System.Security.Cryptography;
 using System.Windows.Forms;
 using tt.messaging.order.enums;
 using tt_net_sdk;
-//using System.Timers;
 using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using WebSocketSharp;
+
 namespace AlgoProject101
 {
     internal class OrdersAndFills
@@ -412,19 +412,18 @@ namespace AlgoProject101
 
             lock (_locker)
             {
-                Task.Run(() =>
+
+                foreach (Order ord in e.Orders)
                 {
-                    foreach (Order ord in e.Orders)
-                    {
-                        //PrintOrderDetails(ord);
-                        Orders.Rows.Add(ord.SiteOrderKey, ord.ConnectionId, ord.InstrumentKey.Alias, ord.InstrumentKey.MarketId, ord.LimitPrice, ord.Side, ord.WorkingQuantity, ord.Account);
-                        //orderMap.Add(ord.SiteOrderKey, ord);
-                        AddtoAlgo_TableandAccount_Table(ord);
-                    }
-                    UpdateOrder_Data();
-                    TimerElapse(null, EventArgs.Empty);
-                    InitializeTimer();
-                });
+                    //PrintOrderDetails(ord);
+                    Orders.Rows.Add(ord.SiteOrderKey, ord.ConnectionId, ord.InstrumentKey.Alias, ord.InstrumentKey.MarketId, ord.LimitPrice, ord.Side, ord.WorkingQuantity, ord.Account);
+                    //orderMap.Add(ord.SiteOrderKey, ord);
+                    AddtoAlgo_TableandAccount_Table(ord);
+                }
+                UpdateOrder_Data();
+                TimerElapse(null, EventArgs.Empty);
+                InitializeTimer();
+
             }
         }
 
@@ -434,21 +433,20 @@ namespace AlgoProject101
             {
                 Console.WriteLine("Added");
                 //PrintOrderDetails(e.Order);
-                Task.Run(() =>
+
+                DataRow checkOrderExist = Orders.Rows.Find(e.Order.SiteOrderKey);
+                if (checkOrderExist != null)
                 {
-                    DataRow checkOrderExist = Orders.Rows.Find(e.Order.SiteOrderKey);
-                    if (checkOrderExist != null)
-                    {
-                        Console.WriteLine(checkOrderExist + "\n" + e.Order);
-                    }
-                    else
-                    {
-                        Orders.Rows.Add(e.Order.SiteOrderKey, e.Order.ConnectionId, e.Order.InstrumentKey.Alias, e.Order.InstrumentKey.MarketId, e.Order.LimitPrice, e.Order.Side, e.Order.WorkingQuantity, e.Order.Account);
-                    }//orderMap.Add(e.Order.SiteOrderKey, e.Order);
-                    UpdateOrder_Data();
-                    Update_Message_Data(e.Order, "Add");
-                    AddtoAlgo_TableandAccount_Table(e.Order);
-                });
+                    Console.WriteLine(checkOrderExist + "\n" + e.Order);
+                }
+                else
+                {
+                    Orders.Rows.Add(e.Order.SiteOrderKey, e.Order.ConnectionId, e.Order.InstrumentKey.Alias, e.Order.InstrumentKey.MarketId, e.Order.LimitPrice, e.Order.Side, e.Order.WorkingQuantity, e.Order.Account);
+                }//orderMap.Add(e.Order.SiteOrderKey, e.Order);
+                UpdateOrder_Data();
+                Update_Message_Data(e.Order, "Add");
+                AddtoAlgo_TableandAccount_Table(e.Order);
+
             }
         }
         void tsubs_OrderDeleted(object sender, OrderDeletedEventArgs e)
@@ -462,18 +460,17 @@ namespace AlgoProject101
                 //Console.WriteLine(e.Message);
                 //PrintOrderDetails(e.DeletedUpdate);
                 //PrintOrderDetails(e.OldOrder);
-                Task.Run(() =>
+
+                DataRow checkOrderExist = Orders.Rows.Find(e.DeletedUpdate.SiteOrderKey);
+                if (checkOrderExist != null)
                 {
-                    DataRow checkOrderExist = Orders.Rows.Find(e.DeletedUpdate.SiteOrderKey);
-                    if (checkOrderExist != null)
-                    {
-                        Orders.Rows.Remove(Orders.Rows.Find(e.DeletedUpdate.SiteOrderKey));
-                    }
-                    //orderMap.Remove(e.DeletedUpdate.SiteOrderKey);
-                    DeleteFromAlgo_TableandAccount_Table(e.DeletedUpdate);
-                    Update_Message_Data(e.DeletedUpdate, "Delete");
-                    UpdateOrder_Data();
-                });
+                    Orders.Rows.Remove(Orders.Rows.Find(e.DeletedUpdate.SiteOrderKey));
+                }
+                //orderMap.Remove(e.DeletedUpdate.SiteOrderKey);
+                DeleteFromAlgo_TableandAccount_Table(e.DeletedUpdate);
+                Update_Message_Data(e.DeletedUpdate, "Delete");
+                UpdateOrder_Data();
+
             }
         }
         void tsubs_OrderFilled(object sender, OrderFilledEventArgs e)
@@ -483,18 +480,17 @@ namespace AlgoProject101
                 Console.WriteLine("filled={0}", e.ToString());
                 Console.WriteLine("OldOrder.WorkingQuantity=" + e.OldOrder.WorkingQuantity + " " + "NewOrder.WorkingQuantity=" + e.NewOrder.WorkingQuantity + " " + "OldOrder.FillQuantity=" + e.OldOrder.FillQuantity + " " + "NewOrder.FillQuantity=" + e.NewOrder.FillQuantity);
                 Console.WriteLine(e.NewOrder.SyntheticType);
-                Task.Run(() =>
-                {
-                    Orders.Rows.Remove(Orders.Rows.Find(e.OldOrder.SiteOrderKey));
-                    //orderMap.Remove(e.OldOrder.SiteOrderKey);
-                    DeleteFromAlgo_TableandAccount_Table(e.OldOrder);
-                    Orders.Rows.Add(e.NewOrder.SiteOrderKey, e.NewOrder.ConnectionId, e.NewOrder.InstrumentKey.Alias, e.NewOrder.InstrumentKey.MarketId, e.NewOrder.LimitPrice, e.NewOrder.Side, e.NewOrder.WorkingQuantity, e.NewOrder.Account);
-                    //orderMap.Add(e.NewOrder.SiteOrderKey, e.NewOrder);
-                    Update_Message_Data(e.NewOrder, "Filled", e.OldOrder);
-                    Console.WriteLine("e.Fill.Instrument" + e.Fill.Instrument + "e.NewOrder.Instrument" + e.NewOrder.Instrument);
-                    UpdateOrder_Data();
-                    AddtoAlgo_TableandAccount_Table(e.NewOrder);
-                });
+
+                Orders.Rows.Remove(Orders.Rows.Find(e.OldOrder.SiteOrderKey));
+                //orderMap.Remove(e.OldOrder.SiteOrderKey);
+                DeleteFromAlgo_TableandAccount_Table(e.OldOrder);
+                Orders.Rows.Add(e.NewOrder.SiteOrderKey, e.NewOrder.ConnectionId, e.NewOrder.InstrumentKey.Alias, e.NewOrder.InstrumentKey.MarketId, e.NewOrder.LimitPrice, e.NewOrder.Side, e.NewOrder.WorkingQuantity, e.NewOrder.Account);
+                //orderMap.Add(e.NewOrder.SiteOrderKey, e.NewOrder);
+                Update_Message_Data(e.NewOrder, "Filled", e.OldOrder);
+                Console.WriteLine("e.Fill.Instrument" + e.Fill.Instrument + "e.NewOrder.Instrument" + e.NewOrder.Instrument);
+                UpdateOrder_Data();
+                AddtoAlgo_TableandAccount_Table(e.NewOrder);
+
             }
         }
         void tsubs_OrderRejected(object sender, OrderRejectedEventArgs e)
@@ -512,42 +508,41 @@ namespace AlgoProject101
                 //PrintOrderDetails(e.NewOrder);
                 //Console.WriteLine(e.OldOrder.);
                 //Console.WriteLine(e.NewOrder);
-                Task.Run(() =>
+
+                try
                 {
-                    try
+                    DataRow rowUpdated = Orders.Rows.Find(e.OldOrder.SiteOrderKey);
+                    if (rowUpdated != null)
                     {
-                        DataRow rowUpdated = Orders.Rows.Find(e.OldOrder.SiteOrderKey);
-                        if (rowUpdated != null)
-                        {
-                            //rowUpdated["Connection_Id"] = e.NewOrder.ConnectionId;
-                            //rowUpdated["Instrument"] = e.NewOrder.InstrumentKey.Alias;
-                            //rowUpdated["Exchange"] = e.NewOrder.InstrumentKey.MarketId;
-                            //rowUpdated["OrderPrice"] = e.NewOrder.LimitPrice;
-                            //rowUpdated["OrderSide"] = e.NewOrder.Side;
-                            //rowUpdated["OrderQuantity"] = e.NewOrder.WorkingQuantity;
-                            //rowUpdated["Account"] = e.NewOrder.Account;
-                            Orders.Rows.Remove(Orders.Rows.Find(e.OldOrder.SiteOrderKey));
-                        }
+                        //rowUpdated["Connection_Id"] = e.NewOrder.ConnectionId;
+                        //rowUpdated["Instrument"] = e.NewOrder.InstrumentKey.Alias;
+                        //rowUpdated["Exchange"] = e.NewOrder.InstrumentKey.MarketId;
+                        //rowUpdated["OrderPrice"] = e.NewOrder.LimitPrice;
+                        //rowUpdated["OrderSide"] = e.NewOrder.Side;
+                        //rowUpdated["OrderQuantity"] = e.NewOrder.WorkingQuantity;
+                        //rowUpdated["Account"] = e.NewOrder.Account;
+                        Orders.Rows.Remove(Orders.Rows.Find(e.OldOrder.SiteOrderKey));
                     }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("old row not found and still giving the error" + ex.Message);
-                    }
-                    //orderMap.Remove(e.OldOrder.SiteOrderKey);
-                    DeleteFromAlgo_TableandAccount_Table(e.OldOrder);
-                    try
-                    {
-                        Orders.Rows.Add(e.NewOrder.SiteOrderKey, e.NewOrder.ConnectionId, e.NewOrder.InstrumentKey.Alias, e.NewOrder.InstrumentKey.MarketId, e.NewOrder.LimitPrice, e.NewOrder.Side, e.NewOrder.WorkingQuantity, e.NewOrder.Account);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("new row not getting added" + ex.Message);
-                    }
-                    //orderMap.Add(e.NewOrder.SiteOrderKey, e.NewOrder);
-                    UpdateOrder_Data();
-                    Update_Message_Data(e.NewOrder, "Update");
-                    AddtoAlgo_TableandAccount_Table(e.NewOrder);
-                });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("old row not found and still giving the error " + ex.Message);
+                }
+                //orderMap.Remove(e.OldOrder.SiteOrderKey);
+                DeleteFromAlgo_TableandAccount_Table(e.OldOrder);
+                try
+                {
+                    Orders.Rows.Add(e.NewOrder.SiteOrderKey, e.NewOrder.ConnectionId, e.NewOrder.InstrumentKey.Alias, e.NewOrder.InstrumentKey.MarketId, e.NewOrder.LimitPrice, e.NewOrder.Side, e.NewOrder.WorkingQuantity, e.NewOrder.Account);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("new row not getting added " + ex.Message);
+                }
+                //orderMap.Add(e.NewOrder.SiteOrderKey, e.NewOrder);
+                UpdateOrder_Data();
+                Update_Message_Data(e.NewOrder, "Update");
+                AddtoAlgo_TableandAccount_Table(e.NewOrder);
+
 
             }
         }
@@ -557,14 +552,12 @@ namespace AlgoProject101
         }
         void tsubs_OrderTimeout(object sender, OrderTimeoutEventArgs e)
         {
-            Task.Run(() =>
-            {
-                Orders.Rows.Remove(Orders.Rows.Find(e.Order.SiteOrderKey));
-                //orderMap.Remove(e.Order.SiteOrderKey);
-                //Console.WriteLine("timeout={0}", e.ToString());
-                UpdateOrder_Data();
-                DeleteFromAlgo_TableandAccount_Table(e.Order);
-            });
+            Orders.Rows.Remove(Orders.Rows.Find(e.Order.SiteOrderKey));
+            //orderMap.Remove(e.Order.SiteOrderKey);
+            //Console.WriteLine("timeout={0}", e.ToString());
+            UpdateOrder_Data();
+            DeleteFromAlgo_TableandAccount_Table(e.Order);
+
         }
     }
 }

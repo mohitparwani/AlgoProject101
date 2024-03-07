@@ -339,11 +339,12 @@ namespace AlgoProject101
             if (action == "Filled")
             {
                 //Console.WriteLine($"{ord.Instrument.GetLegs().Count} && {ord2.Instrument.GetLegs().Count}");
-                if (ord2 != null && ord.Instrument.GetLegs().Count == 0 && ord2.Instrument.GetLegs().Count == 0)
+                if (ord.Instrument.GetLegs().Count == 0 && ord2.Instrument.GetLegs().Count == 0)
                 {
                     Console.WriteLine($"in it{ord.Instrument.GetLegs().Count} && {ord2.Instrument.GetLegs().Count}");
-                    ConnectionRowtoUpdate["Volume"] = Convert.ToInt32(ConnectionRowtoUpdate["Volume"]) + ord.FillQuantity - ord2.FillQuantity;
-                    AccountRowtoUpdate["Volume"] = Convert.ToInt32(AccountRowtoUpdate["Volume"]) + ord.FillQuantity - ord2.FillQuantity;
+                    Quantity volumeToAdd = (ord2 != null ? (ord.FillQuantity - ord2.FillQuantity) : ord.WorkingQuantity);
+                    ConnectionRowtoUpdate["Volume"] = Convert.ToInt32(ConnectionRowtoUpdate["Volume"]) + volumeToAdd;
+                    AccountRowtoUpdate["Volume"] = Convert.ToInt32(AccountRowtoUpdate["Volume"]) + volumeToAdd;
                 }
             }
             else

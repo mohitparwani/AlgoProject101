@@ -11,6 +11,8 @@ using System.Windows.Forms;
 using tt_net_sdk;
 using System.IO;
 using AlgoProject101;
+using WebSocketSharp.Server;
+using WebSocketSharp;
 
 
 namespace AlgoProject1
@@ -21,7 +23,9 @@ namespace AlgoProject1
         OrdersAndFills oaf;
         //private Timer timer;
         //private string connectionString;
+       
         private TTAPI n_api = null;
+
         private bool n_isShutDown = false, n_shutdownInProcess = false;
         //private tt_net_sdk.WorkerDispatcher n_disp = null;
         public AlgoForm()
@@ -82,7 +86,7 @@ namespace AlgoProject1
             {
                 TTAPI.ShutdownCompleted += new EventHandler(TTAPI_ShutdownCompleted);
                 TTAPI.Shutdown();
-
+                
                 n_shutdownInProcess = true;
             }
         }
@@ -105,6 +109,7 @@ namespace AlgoProject1
 
         private void initInstruments()
         {
+            
             //CustomInstrument zw = new CustomInstrument(MarketId.CME, ProductType.Future, "CL",Order_Data);
             oaf = new OrdersAndFills(tt_net_sdk.Dispatcher.Current, LiveOrders,Order_Data,Algo_Orders,Account_Data,Connection_Message_Data,Account_Message_Data);
         }

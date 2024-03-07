@@ -10,16 +10,39 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using WebSocketSharp;
+using WebSocketSharp.Server;
+using Newtonsoft.Json;
+using System.Diagnostics;
+using tt_net_sdk.util;
+using System.Security.Cryptography;
+
 
 namespace AlgoProject101
 {
+    public class DATA : WebSocketBehavior
+    {
+        protected override void OnMessage(MessageEventArgs e)
+        {
+            Console.WriteLine("Received message from client" + e.Data);
+            Send(e.Data);
+        }
+        protected override void OnOpen()
+        {
+            Console.WriteLine("ws open");
+            base.OnOpen();
+        }
+    }
     internal class OrdersAndFills
     {
+        WebSocketServer wssv;
         private readonly object _locker = new object();
         private readonly object sm_locker = new object();
         TradeSubscription tsubs;
         private Timer timer;
-        HashSet<string> uniqueFills;
+        private Timer updateTimer;
+        private Timer updateOrderTimer;
+        HashSet<string> orders;
+
         //Dictionary<ulong, Dictionary<string, Account>> orderMap = new Dictionary<ulong, Dictionary<string, Account>>();
         //Dictionary<string, Order> orderMap = new Dictionary<string, Order>();
         DataTable Orders;
@@ -28,9 +51,10 @@ namespace AlgoProject101
         DataTable Account_Table;
         DataTable Connection_Message_Table;
         DataTable Account_Message_Table;
+
         public OrdersAndFills(Dispatcher disp, DataGridView LiveOrders, DataGridView Order_Data, DataGridView Algo_Orders, DataGridView Account_Data, DataGridView Connection_Message_Data, DataGridView Account_Message_Data)
         {
-
+            Initialize_WebSocket();
             tsubs = new TradeSubscription(disp);
             tsubs.OrderBookDownload += new EventHandler<OrderBookDownloadEventArgs>(tsubs_OrderBookDownload);
             tsubs.OrderAdded += new EventHandler<OrderAddedEventArgs>(tsubs_OrderAdded);
@@ -42,13 +66,24 @@ namespace AlgoProject101
             tsubs.OrderTimeout += new EventHandler<OrderTimeoutEventArgs>(tsubs_OrderTimeout);
             Order_Data.CellClick += (sender, e) => Order_Data_CellClick(sender, e, Order_Data, LiveOrders, Account_Data);
             Account_Data.CellClick += (sender, e) => Account_Data_CellClick(sender, e, Account_Data, LiveOrders);
-            uniqueFills = new HashSet<string>();
+            orders = new HashSet<string>();
             BindOrder_Data(Order_Data);
             BindAlgo_Orders(Algo_Orders);
             BindLiveOrders(LiveOrders);
             BindAccount_Data(Account_Data);
             BindMessage_Table(Connection_Message_Data, Account_Message_Data);
             tsubs.Start();
+        }
+        void Initialize_WebSocket()
+        {
+            wssv = new WebSocketServer("ws://10.136.25.45:1234");
+            wssv.Start();
+            Console.WriteLine("server started on ws://localhost:1234");
+            wssv.AddWebSocketService<DATA>("/ConnectionMessageData");
+            wssv.AddWebSocketService<DATA>("/AccountMessageData");
+            wssv.AddWebSocketService<DATA>("/ConnectionIdData");
+            wssv.AddWebSocketService<DATA>("/AccountData");
+            wssv.AddWebSocketService<DATA>("/AlgoData");
         }
         void Account_Data_CellClick(object sender, DataGridViewCellEventArgs e, DataGridView Account_Data, DataGridView LiveOrders)
         {
@@ -93,7 +128,40 @@ namespace AlgoProject101
             timer.Interval = 5 * 60 * 1000;
             timer.Tick += TimerElapse;
             timer.Start();
+
+            updateTimer = new Timer();
+            updateTimer.Interval = 100 * 1000;
+            updateTimer.Tick += UpdateData;
+            updateTimer.Start();
+
+            updateOrderTimer = new Timer();
+            updateOrderTimer.Interval = 150 * 1000;
+            updateOrderTimer.Tick += UpdateOrder_Data;
+            updateOrderTimer.Start();
         }
+        void UpdateData(Object sender, EventArgs e)
+        {
+            BroadcastWebSocketData(wssv, "/ConnectionIdData", SummaryTable, "ConnectionIdData");
+            BroadcastWebSocketData(wssv, "/AccountMessageData", Account_Message_Table, "AccountMessageData");
+            BroadcastWebSocketData(wssv, "/ConnectionMessageData", Connection_Message_Table, "ConnectionMessageData");
+            BroadcastWebSocketData(wssv, "/AccountData", Account_Table, "AccountData");
+            BroadcastWebSocketData(wssv, "/AlgoData", Algo_Table, "AlgoData");
+        }
+        void BroadcastWebSocketData(WebSocketServer wssv, string path, DataTable data, string errorMessage)
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(data);
+                wssv.WebSocketServices[path].Sessions.Broadcast(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error connecting to {path} client: {errorMessage} {ex}");
+                Console.WriteLine("160");
+            }
+        }
+
+
         async void TimerElapse(object sender, EventArgs e)
         {
             Task task1 = WriteDataTableToCsv("C:\\Users\\mohit.parwani\\Order_Summary.csv", SummaryTable);
@@ -141,6 +209,7 @@ namespace AlgoProject101
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
+                Console.WriteLine("212");
             }
         }
         void BindMessage_Table(DataGridView Connection_Message_Data, DataGridView Account_Message_Data)
@@ -233,7 +302,7 @@ namespace AlgoProject101
             LiveOrders.Columns["Account"].DataPropertyName = "Account";
 
         }
-        void UpdateOrder_Data()
+        void UpdateOrder_Data(Object sender, EventArgs e)
         {
             SummaryTable.Clear();
             var groupedOrders = from row in Orders.AsEnumerable()
@@ -244,29 +313,16 @@ namespace AlgoProject101
                                     NumberofOrders = grp.Count(),
                                     NumberofUniqueAccounts = grp.Select(r => r.Field<string>("Account")).Distinct().Count()
                                 };
-            //var groupedOrders = orderMap.Values.GroupBy(ord => ord.ConnectionId).Select(group => new
-            //{
-            //    ConnectionId = group.Key,
-            //    NumberOfOrders = group.Count(),
-            //    NumberOfUniqueAccouts = group.Select(order => order.Account).Distinct().Count()
-            //});
-            ConcurrentDictionary<object, DataRow> summaryRows = new ConcurrentDictionary<object, DataRow>();
 
-            Parallel.ForEach(groupedOrders, item =>
-            {
-                DataRow newRow = SummaryTable.NewRow();
-                newRow["ConnectionId"] = item.ConnectionId;
-                newRow["NumberofOrders"] = item.NumberofOrders;
-                newRow["NumberofUniqueAccounts"] = item.NumberofUniqueAccounts;
-                summaryRows.TryAdd(item.ConnectionId, newRow);
-            });
 
-            foreach (var row in summaryRows)
+            foreach (var item in groupedOrders)
             {
-                SummaryTable.Rows.Add(row.Value);
+                SummaryTable.Rows.Add(item.ConnectionId, item.NumberofOrders, item.NumberofUniqueAccounts);
             }
-
         }
+        //    string json = JsonConvert.SerializeObject(SummaryTable);
+        //wssv.WebSocketServices["/Data"].Sessions.Broadcast(json);
+
         void Update_Message_Data(Order ord, string action, Order ord2 = null)
         {
 
@@ -280,10 +336,10 @@ namespace AlgoProject101
             {
                 AccountRowtoUpdate = Account_Message_Table.Rows.Add(ord.Account, 0, 0, 0, 0, 0, "NA");
             }
-            if (ord2 != null && action == "Filled")
+            if (action == "Filled")
             {
-                Console.WriteLine($"{ord.Instrument.GetLegs().Count} && {ord2.Instrument.GetLegs().Count}");
-                if (ord.Instrument.GetLegs().Count == 0 && ord2.Instrument.GetLegs().Count == 0)
+                //Console.WriteLine($"{ord.Instrument.GetLegs().Count} && {ord2.Instrument.GetLegs().Count}");
+                if (ord2 != null && ord.Instrument.GetLegs().Count == 0 && ord2.Instrument.GetLegs().Count == 0)
                 {
                     Console.WriteLine($"in it{ord.Instrument.GetLegs().Count} && {ord2.Instrument.GetLegs().Count}");
                     ConnectionRowtoUpdate["Volume"] = Convert.ToInt32(ConnectionRowtoUpdate["Volume"]) + ord.FillQuantity - ord2.FillQuantity;
@@ -326,26 +382,31 @@ namespace AlgoProject101
 
         void DeleteFromAlgo_TableandAccount_Table(Order ord)
         {
-            DataRow AccountRowtoUpdate = Account_Table.Rows.Find(new object[] { ord.ConnectionId, ord.Account });
-            if (AccountRowtoUpdate != null)
+            Action updateAccountTable = () =>
             {
-                int entry = Convert.ToInt32(AccountRowtoUpdate["NumberofOrders"]);
-                if (entry > 1)
+                DataRow AccountRowtoUpdate = Account_Table.Rows.Find(new object[] { ord.ConnectionId, ord.Account });
+                if (AccountRowtoUpdate != null)
                 {
-                    AccountRowtoUpdate["NumberofOrders"] = entry - 1;
+                    int entry = Convert.ToInt32(AccountRowtoUpdate["NumberofOrders"]);
+                    if (entry > 1)
+                    {
+                        AccountRowtoUpdate["NumberofOrders"] = entry - 1;
+                    }
+                    else
+                        Account_Table.Rows.Remove(AccountRowtoUpdate);
                 }
-                else
-                    Account_Table.Rows.Remove(AccountRowtoUpdate);
-            }
-            if (ord.SyntheticStatus != tt_net_sdk.SynthStatus.NotSet)
-                //Console.WriteLine(ord.SyntheticStatus + " " + ord.SyntheticType);
+            };
+            //if (ord.SyntheticStatus != tt_net_sdk.SynthStatus.NotSet)
+            //Console.WriteLine(ord.SyntheticStatus + " " + ord.SyntheticType);
+            Action updateAlgoTable = () =>
+            {
                 if (ord.Algo != null)
                 {
                     DataRow AlgorowToUpdate = Algo_Table.Rows.Find(new object[] { ord.Algo.Alias, ord.SyntheticStatus, ord.Account });
                     if (AlgorowToUpdate != null)
                     {
                         int entry = Convert.ToInt32(AlgorowToUpdate["NumberofOrders"]);
-                        if (entry == 1)
+                        if (entry <= 1)
                         {
                             Algo_Table.Rows.Remove(AlgorowToUpdate);
                         }
@@ -354,6 +415,8 @@ namespace AlgoProject101
                     }
 
                 }
+            };
+            Parallel.Invoke(updateAccountTable, updateAlgoTable);
         }
 
         void AddtoAlgo_TableandAccount_Table(Order ord)
@@ -405,24 +468,58 @@ namespace AlgoProject101
             Console.WriteLine("\n" + ord + "  " + ord.OrderType);
             //Console.WriteLine("acct={0,-15}\tinstrument={3,-30}\tlimit price={1,-15}\tworking qty={2,-15}\tconnectionId={4,-15}", ord.Account, ord.LimitPrice, ord.WorkingQuantity, ord.InstrumentKey, ord.ConnectionId);
         }
+        void AddOrder(Order ord)
+        {
+
+            if (orders.Contains(ord.SiteOrderKey))
+            {
+                DataRow rowToRemove = Orders.Rows.Find(ord.SiteOrderKey);
+                Console.WriteLine(rowToRemove + "\n" + ord);
+                Orders.Rows.Remove(rowToRemove);
+                orders.Remove(ord.SiteOrderKey);
+            }
+            else
+            {
+                AddtoAlgo_TableandAccount_Table(ord);
+            }
+            try
+            {
+                orders.Add(ord.SiteOrderKey);
+                Orders.Rows.Add(ord.SiteOrderKey, ord.ConnectionId, ord.InstrumentKey.Alias, ord.InstrumentKey.MarketId, ord.LimitPrice, ord.Side, ord.WorkingQuantity, ord.Account);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine("486");
+            }
+        }
+        void RemoveOrder(Order ord)
+        {
+            if (ord != null && orders.Contains(ord.SiteOrderKey))
+            {
+                DataRow rowToRemove = Orders.Rows.Find(ord.SiteOrderKey);
+                Orders.Rows.Remove(rowToRemove);
+                orders.Remove(ord.SiteOrderKey);
+                DeleteFromAlgo_TableandAccount_Table(ord);
+            }
+        }
         void tsubs_OrderBookDownload(object sender, OrderBookDownloadEventArgs e)
         {
-            //Console.WriteLine("downloading order book");
-            //Console.WriteLine(e.Orders);
+            Console.WriteLine("downloading order book");
 
             lock (_locker)
             {
 
                 foreach (Order ord in e.Orders)
                 {
-                    //PrintOrderDetails(ord);
-                    Orders.Rows.Add(ord.SiteOrderKey, ord.ConnectionId, ord.InstrumentKey.Alias, ord.InstrumentKey.MarketId, ord.LimitPrice, ord.Side, ord.WorkingQuantity, ord.Account);
-                    //orderMap.Add(ord.SiteOrderKey, ord);
-                    AddtoAlgo_TableandAccount_Table(ord);
+                    AddOrder(ord);
                 }
-                UpdateOrder_Data();
+                UpdateOrder_Data(null, EventArgs.Empty);
+                UpdateData(null, EventArgs.Empty);
                 TimerElapse(null, EventArgs.Empty);
                 InitializeTimer();
+
+
 
             }
         }
@@ -434,18 +531,8 @@ namespace AlgoProject101
                 Console.WriteLine("Added");
                 //PrintOrderDetails(e.Order);
 
-                DataRow checkOrderExist = Orders.Rows.Find(e.Order.SiteOrderKey);
-                if (checkOrderExist != null)
-                {
-                    Console.WriteLine(checkOrderExist + "\n" + e.Order);
-                }
-                else
-                {
-                    Orders.Rows.Add(e.Order.SiteOrderKey, e.Order.ConnectionId, e.Order.InstrumentKey.Alias, e.Order.InstrumentKey.MarketId, e.Order.LimitPrice, e.Order.Side, e.Order.WorkingQuantity, e.Order.Account);
-                }//orderMap.Add(e.Order.SiteOrderKey, e.Order);
-                UpdateOrder_Data();
+                AddOrder(e.Order);
                 Update_Message_Data(e.Order, "Add");
-                AddtoAlgo_TableandAccount_Table(e.Order);
 
             }
         }
@@ -453,23 +540,13 @@ namespace AlgoProject101
         {
             lock (_locker)
             {
-                //Console.WriteLine("deleted={0}", e.ToString());
-                //Console.WriteLine("Delete");
-                //string key = e.DeletedUpdate.SiteOrderKey;
-                //Console.WriteLine(orderMap.ContainsKey(key) ? "true" : "false");
-                //Console.WriteLine(e.Message);
-                //PrintOrderDetails(e.DeletedUpdate);
-                //PrintOrderDetails(e.OldOrder);
+                Console.WriteLine("Delete");
 
-                DataRow checkOrderExist = Orders.Rows.Find(e.DeletedUpdate.SiteOrderKey);
-                if (checkOrderExist != null)
-                {
-                    Orders.Rows.Remove(Orders.Rows.Find(e.DeletedUpdate.SiteOrderKey));
-                }
-                //orderMap.Remove(e.DeletedUpdate.SiteOrderKey);
-                DeleteFromAlgo_TableandAccount_Table(e.DeletedUpdate);
+
+                RemoveOrder(e.DeletedUpdate);
                 Update_Message_Data(e.DeletedUpdate, "Delete");
-                UpdateOrder_Data();
+                //orderMap.Remove(e.DeletedUpdate.SiteOrderKey);
+                //UpdateOrder_Data();
 
             }
         }
@@ -477,25 +554,19 @@ namespace AlgoProject101
         {
             lock (_locker)
             {
-                Console.WriteLine("filled={0}", e.ToString());
-                Console.WriteLine("OldOrder.WorkingQuantity=" + e.OldOrder.WorkingQuantity + " " + "NewOrder.WorkingQuantity=" + e.NewOrder.WorkingQuantity + " " + "OldOrder.FillQuantity=" + e.OldOrder.FillQuantity + " " + "NewOrder.FillQuantity=" + e.NewOrder.FillQuantity);
-                Console.WriteLine(e.NewOrder.SyntheticType);
-
-                Orders.Rows.Remove(Orders.Rows.Find(e.OldOrder.SiteOrderKey));
-                //orderMap.Remove(e.OldOrder.SiteOrderKey);
-                DeleteFromAlgo_TableandAccount_Table(e.OldOrder);
-                Orders.Rows.Add(e.NewOrder.SiteOrderKey, e.NewOrder.ConnectionId, e.NewOrder.InstrumentKey.Alias, e.NewOrder.InstrumentKey.MarketId, e.NewOrder.LimitPrice, e.NewOrder.Side, e.NewOrder.WorkingQuantity, e.NewOrder.Account);
-                //orderMap.Add(e.NewOrder.SiteOrderKey, e.NewOrder);
+                Console.WriteLine("filled={0}\n", e.ToString());
+                RemoveOrder(e.OldOrder);
+                AddOrder(e.NewOrder);
                 Update_Message_Data(e.NewOrder, "Filled", e.OldOrder);
-                Console.WriteLine("e.Fill.Instrument" + e.Fill.Instrument + "e.NewOrder.Instrument" + e.NewOrder.Instrument);
-                UpdateOrder_Data();
-                AddtoAlgo_TableandAccount_Table(e.NewOrder);
+                //Console.WriteLine("e.Fill.Instrument" + e.Fill.Instrument + "e.NewOrder.Instrument" + e.NewOrder.Instrument);
+                //orderMap.Add(e.NewOrder.SiteOrderKey, e.NewOrder);
+                //UpdateOrder_Data();
 
             }
         }
         void tsubs_OrderRejected(object sender, OrderRejectedEventArgs e)
         {
-            Orders.Rows.Remove(Orders.Rows.Find(e.Order.SiteOrderKey));
+            RemoveOrder(e.Order);
             //orderMap.Remove(e.Order.SiteOrderKey);
             //Console.WriteLine("rejected={0}", e.ToString());
         }
@@ -503,45 +574,11 @@ namespace AlgoProject101
         {
             lock (_locker)
             {
-                //Console.WriteLine(e.Message);
-                //PrintOrderDetails(e.NewOrder);
-                //PrintOrderDetails(e.NewOrder);
-                //Console.WriteLine(e.OldOrder.);
-                //Console.WriteLine(e.NewOrder);
+                RemoveOrder(e.OldOrder);
 
-                try
-                {
-                    DataRow rowUpdated = Orders.Rows.Find(e.OldOrder.SiteOrderKey);
-                    if (rowUpdated != null)
-                    {
-                        //rowUpdated["Connection_Id"] = e.NewOrder.ConnectionId;
-                        //rowUpdated["Instrument"] = e.NewOrder.InstrumentKey.Alias;
-                        //rowUpdated["Exchange"] = e.NewOrder.InstrumentKey.MarketId;
-                        //rowUpdated["OrderPrice"] = e.NewOrder.LimitPrice;
-                        //rowUpdated["OrderSide"] = e.NewOrder.Side;
-                        //rowUpdated["OrderQuantity"] = e.NewOrder.WorkingQuantity;
-                        //rowUpdated["Account"] = e.NewOrder.Account;
-                        Orders.Rows.Remove(Orders.Rows.Find(e.OldOrder.SiteOrderKey));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("old row not found and still giving the error " + ex.Message);
-                }
                 //orderMap.Remove(e.OldOrder.SiteOrderKey);
-                DeleteFromAlgo_TableandAccount_Table(e.OldOrder);
-                try
-                {
-                    Orders.Rows.Add(e.NewOrder.SiteOrderKey, e.NewOrder.ConnectionId, e.NewOrder.InstrumentKey.Alias, e.NewOrder.InstrumentKey.MarketId, e.NewOrder.LimitPrice, e.NewOrder.Side, e.NewOrder.WorkingQuantity, e.NewOrder.Account);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("new row not getting added " + ex.Message);
-                }
-                //orderMap.Add(e.NewOrder.SiteOrderKey, e.NewOrder);
-                UpdateOrder_Data();
+                AddOrder(e.NewOrder);
                 Update_Message_Data(e.NewOrder, "Update");
-                AddtoAlgo_TableandAccount_Table(e.NewOrder);
 
 
             }
@@ -552,11 +589,7 @@ namespace AlgoProject101
         }
         void tsubs_OrderTimeout(object sender, OrderTimeoutEventArgs e)
         {
-            Orders.Rows.Remove(Orders.Rows.Find(e.Order.SiteOrderKey));
-            //orderMap.Remove(e.Order.SiteOrderKey);
-            //Console.WriteLine("timeout={0}", e.ToString());
-            UpdateOrder_Data();
-            DeleteFromAlgo_TableandAccount_Table(e.Order);
+            RemoveOrder(e.Order);
 
         }
     }

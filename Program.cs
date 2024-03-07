@@ -5,11 +5,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using tt_net_sdk;
+using WebSocketSharp.Server;
 
 namespace AlgoProject1
 {
     internal static class Program
     {
+
         /// <summary>
         /// The main entry point for the application.
 
@@ -19,6 +21,8 @@ namespace AlgoProject1
         {
             using (Dispatcher disp = Dispatcher.AttachUIDispatcher())
             {
+
+               
                 Application.EnableVisualStyles();
                 //Application.SetCompatibleTextRenderingDefault(false);
 
@@ -31,6 +35,7 @@ namespace AlgoProject1
                 ApiInitializeHandler handler = new ApiInitializeHandler(newForm.ttNetApiInitHandler);
                 TTAPI.CreateTTAPI(disp, apiconfig, handler);
                 Application.Run(newForm);
+                
             }
         }
     }

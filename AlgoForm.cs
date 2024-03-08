@@ -23,7 +23,7 @@ namespace AlgoProject1
         OrdersAndFills oaf;
         //private Timer timer;
         //private string connectionString;
-       
+        WebSocketServer wssv;
         private TTAPI n_api = null;
 
         private bool n_isShutDown = false, n_shutdownInProcess = false;
@@ -44,6 +44,7 @@ namespace AlgoProject1
         private void NewApp_FormClosed(object sender, FormClosedEventArgs e)
         {
             shutdownTTAPI();
+            
         }
 
         public void ttNetApiInitHandler(TTAPI api, ApiCreationException e)
@@ -52,7 +53,9 @@ namespace AlgoProject1
             {
                 n_api = api;
                 n_api.TTAPIStatusUpdate += new EventHandler<TTAPIStatusUpdateEventArgs>(n_api_TTAPIStatusUpdate);
+                wssv = new WebSocketServer("ws://10.136.25.45:1234");
                 n_api.Start();
+                wssv.Start();
             }
             else if (e.IsRecoverable)
             {
@@ -86,7 +89,6 @@ namespace AlgoProject1
             {
                 TTAPI.ShutdownCompleted += new EventHandler(TTAPI_ShutdownCompleted);
                 TTAPI.Shutdown();
-                
                 n_shutdownInProcess = true;
             }
         }
@@ -94,6 +96,7 @@ namespace AlgoProject1
         public void TTAPI_ShutdownCompleted(object sender, EventArgs e)
         {
             n_isShutDown = true;
+            wssv.Stop();
             Close();
         }
 
@@ -111,7 +114,7 @@ namespace AlgoProject1
         {
             
             //CustomInstrument zw = new CustomInstrument(MarketId.CME, ProductType.Future, "CL",Order_Data);
-            oaf = new OrdersAndFills(tt_net_sdk.Dispatcher.Current, LiveOrders,Order_Data,Algo_Orders,Account_Data,Connection_Message_Data,Account_Message_Data);
+            oaf = new OrdersAndFills(tt_net_sdk.Dispatcher.Current, LiveOrders,Order_Data,Algo_Orders,Account_Data,Connection_Message_Data,Account_Message_Data,wssv);
         }
     }
     

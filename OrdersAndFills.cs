@@ -34,7 +34,7 @@ namespace AlgoProject101
     }
     internal class OrdersAndFills
     {
-        WebSocketServer wssv;
+        
         private readonly object _locker = new object();
         private readonly object sm_locker = new object();
         TradeSubscription tsubs;
@@ -42,9 +42,7 @@ namespace AlgoProject101
         private Timer updateTimer;
         private Timer updateOrderTimer;
         HashSet<string> orders;
-
-        //Dictionary<ulong, Dictionary<string, Account>> orderMap = new Dictionary<ulong, Dictionary<string, Account>>();
-        //Dictionary<string, Order> orderMap = new Dictionary<string, Order>();
+        WebSocketServer OAFwssv;
         DataTable Orders;
         DataTable SummaryTable;
         DataTable Algo_Table;
@@ -52,9 +50,10 @@ namespace AlgoProject101
         DataTable Connection_Message_Table;
         DataTable Account_Message_Table;
 
-        public OrdersAndFills(Dispatcher disp, DataGridView LiveOrders, DataGridView Order_Data, DataGridView Algo_Orders, DataGridView Account_Data, DataGridView Connection_Message_Data, DataGridView Account_Message_Data)
+        public OrdersAndFills(Dispatcher disp, DataGridView LiveOrders, DataGridView Order_Data, DataGridView Algo_Orders, DataGridView Account_Data, DataGridView Connection_Message_Data, DataGridView Account_Message_Data,WebSocketServer wssv)
         {
-            Initialize_WebSocket();
+            
+            Initialize_WebSocket(wssv);
             tsubs = new TradeSubscription(disp);
             tsubs.OrderBookDownload += new EventHandler<OrderBookDownloadEventArgs>(tsubs_OrderBookDownload);
             tsubs.OrderAdded += new EventHandler<OrderAddedEventArgs>(tsubs_OrderAdded);
@@ -74,16 +73,15 @@ namespace AlgoProject101
             BindMessage_Table(Connection_Message_Data, Account_Message_Data);
             tsubs.Start();
         }
-        void Initialize_WebSocket()
+        void Initialize_WebSocket(WebSocketServer wssv)
         {
-            wssv = new WebSocketServer("ws://10.136.25.45:1234");
-            wssv.Start();
+            OAFwssv = wssv;
             Console.WriteLine("server started on ws://localhost:1234");
-            wssv.AddWebSocketService<DATA>("/ConnectionMessageData");
-            wssv.AddWebSocketService<DATA>("/AccountMessageData");
-            wssv.AddWebSocketService<DATA>("/ConnectionIdData");
-            wssv.AddWebSocketService<DATA>("/AccountData");
-            wssv.AddWebSocketService<DATA>("/AlgoData");
+            OAFwssv.AddWebSocketService<DATA>("/ConnectionMessageData");
+            OAFwssv.AddWebSocketService<DATA>("/AccountMessageData");
+            OAFwssv.AddWebSocketService<DATA>("/ConnectionIdData");
+            OAFwssv.AddWebSocketService<DATA>("/AccountData");
+            OAFwssv.AddWebSocketService<DATA>("/AlgoData");
         }
         void Account_Data_CellClick(object sender, DataGridViewCellEventArgs e, DataGridView Account_Data, DataGridView LiveOrders)
         {
@@ -130,29 +128,30 @@ namespace AlgoProject101
             timer.Start();
 
             updateTimer = new Timer();
-            updateTimer.Interval = 100 * 1000;
-            updateTimer.Tick += UpdateData;
+            updateTimer.Interval = 10 * 1000;
+            updateTimer.Tick +=UpdateData;
             updateTimer.Start();
 
             updateOrderTimer = new Timer();
-            updateOrderTimer.Interval = 150 * 1000;
+            updateOrderTimer.Interval = 15 * 1000;
             updateOrderTimer.Tick += UpdateOrder_Data;
             updateOrderTimer.Start();
         }
         void UpdateData(Object sender, EventArgs e)
         {
-            BroadcastWebSocketData(wssv, "/ConnectionIdData", SummaryTable, "ConnectionIdData");
-            BroadcastWebSocketData(wssv, "/AccountMessageData", Account_Message_Table, "AccountMessageData");
-            BroadcastWebSocketData(wssv, "/ConnectionMessageData", Connection_Message_Table, "ConnectionMessageData");
-            BroadcastWebSocketData(wssv, "/AccountData", Account_Table, "AccountData");
-            BroadcastWebSocketData(wssv, "/AlgoData", Algo_Table, "AlgoData");
+            BroadcastWebSocketData(OAFwssv, "/ConnectionIdData", SummaryTable, "ConnectionIdData");
+            BroadcastWebSocketData(OAFwssv, "/AccountMessageData", Account_Message_Table, "AccountMessageData");
+            BroadcastWebSocketData(OAFwssv, "/ConnectionMessageData", Connection_Message_Table, "ConnectionMessageData");
+            BroadcastWebSocketData(OAFwssv, "/AccountData", Account_Table, "AccountData");
+            BroadcastWebSocketData(OAFwssv, "/AlgoData", Algo_Table, "AlgoData");
         }
-        void BroadcastWebSocketData(WebSocketServer wssv, string path, DataTable data, string errorMessage)
+        void BroadcastWebSocketData(WebSocketServer OAFwssv, string path, DataTable data, string errorMessage)
         {
             try
             {
                 string json = JsonConvert.SerializeObject(data);
-                wssv.WebSocketServices[path].Sessions.Broadcast(json);
+                OAFwssv.WebSocketServices[path].Sessions.Broadcast(json);
+                Console.WriteLine(json);
             }
             catch (Exception ex)
             {
@@ -434,17 +433,38 @@ namespace AlgoProject101
                     Account_Table.Rows.Add(ord.ConnectionId, ord.Account, "1");
                 }
             };
-            //if (ord.SyntheticStatus != tt_net_sdk.SynthStatus.NotSet)
-            //{
-            //    foreach (Leg leg in ord.Instrument.GetLegs())
-            //    {
-            //        Console.Write("leg.Instrument.GetLegs().Count=" + leg.Instrument.GetLegs().Count + " " + "leg.QuantityRatio=" + leg.QuantityRatio + "____");
-            //        foreach (var ran in leg.Instrument.GetLegs())
-            //            Console.Write("ran.Instrument.GetLegs().Count=" + ran.Instrument.GetLegs().Count + "__" + "ran.QuantityRatio=" + ran.QuantityRatio + "\t");
-            //    }
-            //    Console.WriteLine(ord.Instrument + "__" + ord.WorkingQuantity);
-            //    Console.WriteLine(ord.SyntheticStatus + " " + ord.SyntheticType + "\n\n");
-            //}
+            if (ord.SyntheticStatus != tt_net_sdk.SynthStatus.NotSet)
+            {
+                foreach (Leg leg in ord.Instrument.GetLegs())
+                {
+                    Console.Write("leg.Instrument.GetLegs().Count=" + leg.Instrument.GetLegs().Count + " " + "leg.QuantityRatio=" + leg.QuantityRatio + "____");
+                    Console.WriteLine(leg.Instrument);
+                    foreach (var ran in leg.Instrument.GetLegs())
+                        Console.Write("ran.Instrument.GetLegs().Count=" + ran.Instrument.GetLegs().Count + "__" + "ran.QuantityRatio=" + ran.QuantityRatio + "\t");
+                }
+
+                Console.WriteLine(ord.Instrument + "__" + ord.WorkingQuantity);
+                if (ord.Instrument.GetSpreadDetails() != null)
+                {
+                    try
+                    {
+                        for (int i = 0; i < ord.Instrument.GetSpreadDetails().LegCount(); i++)
+                        {
+                            Console.WriteLine(ord.Instrument.GetSpreadDetails().GetLeg(i).Instrument);
+                        }
+                        for (int i = 0; i < ord.Instrument.GetSpreadDetails().RuleCount(); i++)
+                        {
+                            Console.WriteLine(ord.Instrument.GetSpreadDetails().GetRule(i).Name);
+                            foreach (var x in ord.Instrument.GetSpreadDetails().GetRule(i).CustomVariables)
+                            {
+                                Console.WriteLine(x.Name + "__" + x.Value + "__" + x.Type);
+                            }
+                        }
+                        Console.WriteLine(ord.SyntheticStatus + " " + ord.SyntheticType + "\n\n");
+                    }
+                    catch (Exception e) { Console.WriteLine(ord); }
+                }
+            }
             Action updateAlgoTable = () =>
             {
                 if (ord.Algo != null)
@@ -475,8 +495,11 @@ namespace AlgoProject101
             if (orders.Contains(ord.SiteOrderKey))
             {
                 DataRow rowToRemove = Orders.Rows.Find(ord.SiteOrderKey);
-                Console.WriteLine(rowToRemove + "\n" + ord);
-                Orders.Rows.Remove(rowToRemove);
+                if (rowToRemove != null)
+                {
+                    Console.WriteLine(rowToRemove + "\n" + ord);
+                    Orders.Rows.Remove(rowToRemove);
+                }
                 orders.Remove(ord.SiteOrderKey);
             }
             else
@@ -499,7 +522,14 @@ namespace AlgoProject101
             if (ord != null && orders.Contains(ord.SiteOrderKey))
             {
                 DataRow rowToRemove = Orders.Rows.Find(ord.SiteOrderKey);
-                Orders.Rows.Remove(rowToRemove);
+                try
+                {
+                    Orders.Rows.Remove(rowToRemove);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("510", ex.Message);
+                }
                 orders.Remove(ord.SiteOrderKey);
                 DeleteFromAlgo_TableandAccount_Table(ord);
             }
@@ -519,9 +549,6 @@ namespace AlgoProject101
                 UpdateData(null, EventArgs.Empty);
                 TimerElapse(null, EventArgs.Empty);
                 InitializeTimer();
-
-
-
             }
         }
 
@@ -542,8 +569,6 @@ namespace AlgoProject101
             lock (_locker)
             {
                 Console.WriteLine("Delete");
-
-
                 RemoveOrder(e.DeletedUpdate);
                 Update_Message_Data(e.DeletedUpdate, "Delete");
                 //orderMap.Remove(e.DeletedUpdate.SiteOrderKey);
@@ -576,12 +601,9 @@ namespace AlgoProject101
             lock (_locker)
             {
                 RemoveOrder(e.OldOrder);
-
                 //orderMap.Remove(e.OldOrder.SiteOrderKey);
                 AddOrder(e.NewOrder);
                 Update_Message_Data(e.NewOrder, "Update");
-
-
             }
         }
         void tsubs_OrderStatusUnknown(object sender, OrderStatusUnknownEventArgs e)
@@ -591,7 +613,6 @@ namespace AlgoProject101
         void tsubs_OrderTimeout(object sender, OrderTimeoutEventArgs e)
         {
             RemoveOrder(e.Order);
-
         }
     }
 }

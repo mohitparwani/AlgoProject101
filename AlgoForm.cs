@@ -53,7 +53,7 @@ namespace AlgoProject1
             {
                 n_api = api;
                 n_api.TTAPIStatusUpdate += new EventHandler<TTAPIStatusUpdateEventArgs>(n_api_TTAPIStatusUpdate);
-                wssv = new WebSocketServer("ws://10.136.25.45:1234");
+                wssv = new WebSocketServer("ws://10.136.25.45:5678");
                 n_api.Start();
                 wssv.Start();
             }

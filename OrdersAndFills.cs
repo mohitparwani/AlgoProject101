@@ -119,8 +119,8 @@ namespace AlgoProject101
             actionIndexPair.Add("Messages", 3);
             actionIndexPair.Add("Volume", 4);
             actionIndexPair.Add("MVR", 5);
-            actionIndexPair.Add("NumberofOrders", 0);
-            actionIndexPair.Add("NumberOfUniqueAccounts", 1);
+            //actionIndexPair.Add("NumberofOrders", 0);
+            //actionIndexPair.Add("NumberOfUniqueAccounts", 1);
         }
         void Initialize_WebSocket(WebSocketServer wssv)
         {
@@ -200,7 +200,7 @@ namespace AlgoProject101
             updateOrderTimer.Start();
 
             Coordinatetimer = new Timer();
-            Coordinatetimer.Interval = 15 * 1000;
+            Coordinatetimer.Interval = 5 * 60 * 1000;
             Coordinatetimer.Tick += UpdateCoordinateChart;
             Coordinatetimer.Start();
         }
@@ -213,14 +213,22 @@ namespace AlgoProject101
                 var accountColumns = CoordinateChart.ContainsKey(acc.Key) ? CoordinateChart[acc.Key] : new Dictionary<string, List<object>>();
                 foreach (var each in actionIndexPair)
                 {
-                    object[] coordinate = { new { x = currentTime, y = acc.Value[each.Value] } };
-                    var ActionCoordinates = accountColumns.ContainsKey(each.Key) ? accountColumns[each.Key] :new List<object>();
+                    object coordinate = new { x = currentTime, y = acc.Value[each.Value] };
+                    var ActionCoordinates = accountColumns.ContainsKey(each.Key) ? accountColumns[each.Key] : new List<object>();
                     ActionCoordinates.Add(coordinate);
                     accountColumns[each.Key] = ActionCoordinates;
                 }
                 CoordinateChart[acc.Key] = accountColumns;
 
             }
+            Console.WriteLine("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+
+            BroadCastCoordinateChart();
+
+        }
+        void BroadCastCoordinateChart()
+        {
+            Console.WriteLine("_____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________");
             try
             {
                 string json = JsonConvert.SerializeObject(CoordinateChart, Formatting.Indented);
@@ -231,7 +239,6 @@ namespace AlgoProject101
                 Console.WriteLine($"Error connecting to charData client: {ex}");
                 Console.WriteLine("178");
             }
-
         }
         void FirstBroadCastData(Object sender, ClientConnectedEventArgs e)
         {
@@ -239,6 +246,7 @@ namespace AlgoProject101
             BroadCastDataToWebSocket("/ConnectionIdData", ConnectionInfo, "ConnectionIdData", e.ClientId);
             BroadCastDataToWebSocket("/AccountMessageData", AccountMessages, "AccountMessageData", e.ClientId);
             BroadCastDataToWebSocket("/ConnectionMessageData", ConnectionMessages, "ConnectionMessageData", e.ClientId);
+            BroadCastCoordinateChart();
         }
         void BroadCastData(Object sender, EventArgs e)
         {
